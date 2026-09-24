@@ -17,6 +17,15 @@ venv/
 # Logs
 *.log
 
+# Cloudflare Workers / Node.js
+node_modules/
+.wrangler/
+.dev.vars
+worker-configuration.d.ts
+*.cpuprofile
+coverage/
+dist/
+
 # macOS
 .DS_Store
 
