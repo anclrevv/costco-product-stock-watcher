@@ -2,7 +2,7 @@
 
 以 Cloudflare Worker 執行的 Costco 台灣商品庫存監控工具。使用者可直接透過 Telegram 新增與管理商品；系統每五分鐘檢查一次 Costco 商品 API，只在可信的狀態改變時通知。
 
-> v2 目前位於 `feat/worker-v2`，尚未部署到正式環境。舊版 Python/Playwright 腳本保留在 `src/monitor.py`，供回溯使用。
+> v2 已於 2026-09-24 部署至正式 Worker `costco-ims`。舊版 Python/Playwright 腳本保留在 `src/monitor.py`，供回溯使用。
 
 ## v2 改善重點
 
@@ -76,7 +76,7 @@ pnpm dev
 
 v2 使用 Worker、D1、既有 `COSTCO_KV`、五分鐘 Cron Trigger 與 Workers Logs。KV 只用於首次匯入舊 watchlist。
 
-`wrangler.jsonc` 目前的 D1 database id 是本機 placeholder。部署前必須先建立正式 D1：
+正式環境使用 APAC D1 `costco-stock-watcher-v2`。建立新的環境時先建立 D1：
 
 ```bash
 pnpm exec wrangler d1 create costco-stock-watcher-v2 --location=apac
@@ -89,6 +89,7 @@ pnpm exec wrangler d1 migrations apply costco-stock-watcher-v2 --remote
 pnpm exec wrangler secret put TELEGRAM_BOT_TOKEN
 pnpm exec wrangler secret put TELEGRAM_CHAT_ID
 pnpm exec wrangler secret put TG_WEBHOOK_SECRET
+# ADMIN_TOKEN 為選用；設定後才會開放 /internal/* 管理端點
 pnpm exec wrangler secret put ADMIN_TOKEN
 pnpm exec wrangler deploy --dry-run
 pnpm exec wrangler deploy
@@ -117,27 +118,25 @@ pnpm exec wrangler deploy
 
 `stockLevelStatus=outOfStock` 或 `stockLevel=0` 才判定缺貨。資料不足時使用 `unknown` 或 `not_found`，不把錯誤當成缺貨。
 
-## 從現有 Worker 遷移
+## 正式環境遷移紀錄
 
-目前正式 Worker `costco-ims` 的盤點結果：
+2026-09-24 已完成：
 
-- 有三個 secret：`TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID`、`TG_WEBHOOK_SECRET`。
-- 綁定既有 KV namespace `COSTCO_KV`。
-- Workers Logs 已開啟。
-- 相容性日期為 `2026-05-12`。
-- **未設定 Cron Trigger**；這是舊資料停在 2026-05-12 的主要原因。
-- 目前 KV watchlist 有五件商品。
-- `/status` 與 `/trackcc/list` 目前公開顯示完整 watchlist；v2 已改成預設不公開。
+- 建立 APAC D1 並套用兩個 migration。
+- 沿用既有 `COSTCO_KV` 與三個 Telegram secrets。
+- 將 Worker `costco-ims` 更新為 v2，保留既有 workers.dev URL 與 webhook 路徑。
+- 新增 `*/5 * * * *` Cron Trigger 與 Workers Logs。
+- 首次 Cron 已從 KV 匯入五件商品，並寫入五筆 stock check baseline。
+- `/status` 與 `/trackcc/list` 不再公開 watchlist；`/internal/*` 預設拒絕未授權請求。
 
-建議切換順序：
+部署前的舊版活動版本為 `35091b0a-0829-47f2-8262-022912d48527`；若需要回滾：
 
-1. 保留 `costco-ims` 不動。
-2. 建立 D1 與 staging Worker `costco-stock-watcher-v2`。
-3. 設定相同 Telegram secrets，但先不要切換 webhook。
-4. 讓 v2 從 KV 匯入五件商品，執行 dry-run 並比對結果。
-5. 觀察 24–48 小時的 scheduled checks、D1 history 與 logs。
-6. 切換 Telegram webhook 到 v2。
-7. 確認補貨去重、錯誤告警與恢復通知後，再停用舊 Worker。
+```bash
+pnpm exec wrangler rollback 35091b0a-0829-47f2-8262-022912d48527 \
+  --message "Rollback Costco watcher v2"
+```
+
+回滾 Worker 不會刪除 v2 D1；D1 可保留作問題調查及重新部署。
 
 ## 專案結構
 

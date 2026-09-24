@@ -1,14 +1,17 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "costco-stock-watcher-v2",
+  "name": "costco-ims",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "APP_ENV": "development",
+    "APP_ENV": "production",
     "TIMEZONE": "Asia/Taipei",
     "CHECK_CONCURRENCY": "2",
     "FAILURE_ALERT_THRESHOLD": "3"
+  },
+  "secrets": {
+    "required": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TG_WEBHOOK_SECRET"]
   },
   "kv_namespaces": [
     {
@@ -20,7 +23,7 @@
     {
       "binding": "DB",
       "database_name": "costco-stock-watcher-v2",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "c08c2f01-5aca-4a7b-b35f-331b69f82a79",
       "migrations_dir": "migrations"
     }
   ],
