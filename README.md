@@ -1,204 +1,157 @@
-# Costco Product Stock Watcher｜Costco 商品庫存監控工具
+# Costco Product Stock Watcher v2
 
-> A Python-based Costco product stock monitor with Telegram notifications.  
-> 一個以 Python 撰寫的 Costco 商品庫存監控工具，可定期檢查商品狀態，並透過 Telegram Bot 發送通知。
+以 Cloudflare Worker 執行的 Costco 台灣商品庫存監控工具。使用者可透過 Telegram 的單一 `/trackcc <商品連結>` 指令新增商品；系統每五分鐘檢查一次 Costco 商品 API，只在可信的狀態改變時通知。
 
----
+> v2 已於 2026-09-24 部署至正式 Worker `costco-ims`。舊版 Python/Playwright 腳本保留在 `src/monitor.py`，供回溯使用。
 
-## Overview｜專案簡介
+## v2 改善重點
 
-This project is a personal automation practice project built with Python, Playwright, and Telegram Bot API. It monitors selected Costco product pages and sends Telegram notifications when product availability changes.
+- Telegram 指令收斂為 `/trackcc <Costco 商品網址>`；其他訊息與指令靜默忽略，保留 namespace 供未來功能使用。
+- D1 持久化商品、檢查歷史、通知狀態及執行鎖。
+- 從既有 `COSTCO_KV` 的 `products` key 自動匯入商品。
+- 明確區分 `in_stock`、`out_of_stock`、`unknown`、`blocked`、`not_found`、`error`。
+- 首次建立基準不推播；只通知已確認的「缺貨 → 有貨」。
+- 使用 notification outbox；Telegram 暫時失敗時會保留並重試通知。
+- 連續錯誤達閾值才告警，恢復後另行通知。
+- Cron 執行鎖避免兩輪監控重疊。
+- 公開 `/health` 不洩漏 watchlist；管理端點需要 Bearer token。
+- 結構化日誌、Cloudflare Workers Logs 與本機 Worker/D1 測試。
 
-本專案是一個個人自動化練習專案，使用 Python、Playwright 與 Telegram Bot API 實作 Costco 商品庫存監控流程。程式會定期檢查指定商品頁面的狀態，並在商品庫存狀態發生變化時，透過 Telegram Bot 發送通知。
-
----
-
-## Features｜功能特色
-
-- Monitor Costco product pages  
-  監控 Costco 商品頁面
-
-- Detect product availability based on page content  
-  根據頁面內容判斷商品庫存狀態
-
-- Send Telegram notifications when stock status changes  
-  當庫存狀態變化時發送 Telegram 通知
-
-- Support scheduled stock checking  
-  支援定期檢查商品狀態
-
-- Display timestamps based on the configured timezone  
-  支援依照指定時區顯示檢查時間
-
-- Manage runtime settings through environment variables  
-  透過環境變數管理執行設定
-
----
-
-## Tech Stack｜技術架構
-
-| Category | Technology |
-|---|---|
-| Language｜程式語言 | Python |
-| Browser Automation｜瀏覽器自動化 | Playwright |
-| HTTP Request｜HTTP 請求 | Requests |
-| Timezone｜時區處理 | pytz |
-| Notification｜通知服務 | Telegram Bot API |
-
----
-
-## Project Structure｜專案結構
+## 架構
 
 ```text
-costco-stock-monitor-bot/
-├── README.md
-├── .gitignore
-├── .env.example
-├── requirements.txt
-├── src/
-│   └── monitor.py
+Telegram webhook ──► command handlers ──► D1 watchlist
+                                            │
+Cloudflare Cron ──► monitor service ──► Costco REST API
+                                            │
+                                     observation + state
+                                            │
+                              D1 history + notification outbox
+                                            │
+                                            ▼
+                                      Telegram Bot API
 ```
 
----
+## Telegram 操作
 
-## Installation｜安裝方式
-
-Install Python dependencies:
-
-安裝 Python 套件：
-
-```bash
-pip install -r requirements.txt
-```
-
-Install the Playwright Chromium browser:
-
-安裝 Playwright 所需的 Chromium 瀏覽器：
-
-```bash
-python -m playwright install chromium
-```
-
-For notebook environments such as Google Colab, additional setup may be required:
-
-若在 Google Colab 等 Notebook 環境執行，可能需要額外安裝：
-
-```bash
-pip install playwright requests pytz
-playwright install --with-deps chromium
-```
-
----
-
-## Configuration｜設定方式
-
-Create a `.env` file from the example file:
-
-由範例檔案建立 `.env` 設定檔：
-
-```bash
-cp .env.example .env
-```
-
-Example configuration:
-
-設定範例如下：
-
-```env
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-TELEGRAM_CHAT_ID=your_telegram_chat_id_here
-TIMEZONE=Asia/Taipei
-CHECK_INTERVAL=300
-```
-
----
-
-## Telegram Bot Setup｜Telegram Bot 設定
-
-1. Create a Telegram bot using BotFather.  
-   使用 BotFather 建立 Telegram Bot。
-
-2. Copy the generated bot token.  
-   複製產生的 Bot Token。
-
-3. Get your Telegram chat ID.  
-   取得 Telegram Chat ID。
-
-4. Add the bot token and chat ID to the `.env` file.  
-   將 Bot Token 與 Chat ID 填入 `.env` 檔案。
-
-5. Run the monitor script.  
-   執行庫存監控程式。
-
----
-
-## Usage｜使用方式
-
-Run the monitor script:
-
-執行監控程式：
-
-```bash
-python src/monitor.py
-```
-
-The script will periodically check the configured Costco product page and send a Telegram notification when the product status changes.
-
-程式會依照設定的檢查間隔，定期檢查 Costco 商品頁面，並在商品狀態變化時發送 Telegram 通知。
-
----
-
-## Example Notification｜通知範例
+唯一接受的訊息格式：
 
 ```text
-Product is now in stock!
-
-Product: Example Product
-Status: In Stock
-Checked at: 2026-05-13 14:30:00
-URL: https://www.costco.com.tw/example-product/p/000000
+/trackcc https://www.costco.com.tw/p/363984
 ```
 
----
+系統只會對這個格式回覆並新增或恢復商品監控；直接貼連結、`/help`、`/status`、舊版 `/trackcc add`，以及訊息按鈕 callback 都不會回應。
 
-## Development Status｜開發狀態
+## 開發環境
 
-This project is currently maintained as a personal learning and automation practice project.
+需求：Node.js 22 以上、pnpm；只有建立資源或部署時才需要 Cloudflare 帳號。
 
-本專案目前作為個人學習與自動化實作練習使用，主要目標是建立可執行、可維護且易於理解的商品監控流程。
+```bash
+pnpm install
+pnpm cf-typegen
+pnpm check
+pnpm test
+pnpm deploy:dry-run
+```
 
----
+建立本機 secrets：
 
-## Roadmap｜未來規劃
+```bash
+cp .dev.vars.example .dev.vars
+```
 
-- Move product URLs to a configuration file  
-  將商品網址移至設定檔管理
+請在 `.dev.vars` 填入 `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID`、`TG_WEBHOOK_SECRET`、`ADMIN_TOKEN`，然後執行：
 
-- Support multiple product monitoring  
-  支援多商品監控
+```bash
+pnpm db:migrate:local
+pnpm dev
+```
 
-- Add stock status history  
-  新增庫存狀態歷史紀錄
+不要把 `.dev.vars` commit 到 Git。
 
-- Add retry and logging mechanisms  
-  加入錯誤重試與日誌紀錄機制
+## Cloudflare 資源
 
-- Support deployment to cloud platforms  
-  支援部署至雲端平台
+v2 使用 Worker、D1、既有 `COSTCO_KV`、五分鐘 Cron Trigger 與 Workers Logs。KV 只用於首次匯入舊 watchlist。
 
-- Add Docker support  
-  新增 Docker 支援
+正式環境使用 APAC D1 `costco-stock-watcher-v2`。建立新的環境時先建立 D1：
 
-- Add GitHub Actions or scheduled execution support  
-  新增 GitHub Actions 或排程執行支援
+```bash
+pnpm exec wrangler d1 create costco-stock-watcher-v2 --location=apac
+```
 
-- Improve stock detection logic for different product page states  
-  優化不同商品頁面狀態下的庫存判斷邏輯
+將回傳的 `database_id` 填入 `wrangler.jsonc`，然後：
 
----
+```bash
+pnpm exec wrangler d1 migrations apply costco-stock-watcher-v2 --remote
+pnpm exec wrangler secret put TELEGRAM_BOT_TOKEN
+pnpm exec wrangler secret put TELEGRAM_CHAT_ID
+pnpm exec wrangler secret put TG_WEBHOOK_SECRET
+# ADMIN_TOKEN 為選用；設定後才會開放 /internal/* 管理端點
+pnpm exec wrangler secret put ADMIN_TOKEN
+pnpm exec wrangler deploy --dry-run
+pnpm exec wrangler deploy
+```
 
-## Disclaimer｜免責聲明
+不要把 secret 當成命令參數、寫入 `wrangler.jsonc` 或 commit 到 Git。
 
-This project is for educational and personal use only. Please use a reasonable check interval and respect the target website's terms of service.
+## HTTP routes
 
-本專案僅供學習與個人用途使用。使用時請設定合理的檢查頻率，並尊重目標網站的服務條款。
+| Route | Access | Purpose |
+|---|---|---|
+| `GET /` | Public | 服務名稱與安全的 route 摘要 |
+| `GET /health` | Public | 健康狀態與商品數量，不含 watchlist 明細 |
+| `POST /tg-webhook/{secret}` | Webhook secret + chat allowlist | Telegram webhook |
+| `GET /internal/status` | Bearer `ADMIN_TOKEN` | 完整狀態 |
+| `POST /internal/check` | Bearer `ADMIN_TOKEN` | 手動執行檢查 |
+
+## 狀態判定
+
+有貨必須同時滿足：
+
+- Costco API 回傳有效的商品 identity。
+- `stockLevelStatus` 為 `inStock`。
+- 商品為 `purchasable`。
+- 如果 API 有提供 `stockLevel`，數量必須大於 0。
+
+`stockLevelStatus=outOfStock` 或 `stockLevel=0` 才判定缺貨。資料不足時使用 `unknown` 或 `not_found`，不把錯誤當成缺貨。
+
+## 正式環境遷移紀錄
+
+2026-09-24 已完成：
+
+- 建立 APAC D1 並套用兩個 migration。
+- 沿用既有 `COSTCO_KV` 與三個 Telegram secrets。
+- 將 Worker `costco-ims` 更新為 v2，保留既有 workers.dev URL 與 webhook 路徑。
+- 新增 `*/5 * * * *` Cron Trigger 與 Workers Logs。
+- 首次 Cron 已從 KV 匯入五件商品，並寫入五筆 stock check baseline。
+- `/status` 與 `/trackcc/list` 不再公開 watchlist；`/internal/*` 預設拒絕未授權請求。
+
+部署前的舊版活動版本為 `35091b0a-0829-47f2-8262-022912d48527`；若需要回滾：
+
+```bash
+pnpm exec wrangler rollback 35091b0a-0829-47f2-8262-022912d48527 \
+  --message "Rollback Costco watcher v2"
+```
+
+回滾 Worker 不會刪除 v2 D1；D1 可保留作問題調查及重新部署。
+
+## 專案結構
+
+```text
+src/
+├── index.ts          # Worker routes 與 scheduled handler
+├── domain.ts         # 狀態模型與通知決策
+├── costco.ts         # Costco API adapter
+├── repository.ts     # D1 repository、KV importer、outbox
+├── monitor.ts        # 排程、併發、鎖與通知派送
+├── notifications.ts  # 狀態改變通知
+├── telegram.ts       # Telegram commands/callbacks
+└── env.ts            # generated Env 上的 secret 型別
+migrations/           # D1 schema
+test/                 # Worker runtime、domain、parser、D1 測試
+src/monitor.py        # v1 legacy script
+```
+
+## 使用限制
+
+本專案僅供個人用途。請維持合理的檢查頻率，尊重 Costco 網站服務條款；本工具不提供 CAPTCHA 規避、會員登入或自動下單功能。

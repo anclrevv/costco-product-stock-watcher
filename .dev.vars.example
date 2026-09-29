@@ -1,0 +1,4 @@
+TELEGRAM_BOT_TOKEN=replace-me
+TELEGRAM_CHAT_ID=replace-me
+TG_WEBHOOK_SECRET=replace-me
+ADMIN_TOKEN=replace-me

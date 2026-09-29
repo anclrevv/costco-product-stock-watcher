@@ -1,0 +1,21 @@
+{
+  "name": "costco-product-stock-watcher",
+  "version": "2.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cf-typegen": "wrangler types",
+    "check": "tsc --noEmit && tsc -p test/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "wrangler dev --test-scheduled",
+    "deploy:dry-run": "wrangler deploy --dry-run",
+    "db:migrate:local": "wrangler d1 migrations apply costco-stock-watcher-v2 --local"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "latest",
+    "typescript": "latest",
+    "vitest": "^4.1.0",
+    "wrangler": "latest"
+  }
+}

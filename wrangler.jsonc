@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "costco-ims",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_ENV": "production",
+    "TIMEZONE": "Asia/Taipei",
+    "CHECK_CONCURRENCY": "2",
+    "FAILURE_ALERT_THRESHOLD": "3"
+  },
+  "secrets": {
+    "required": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TG_WEBHOOK_SECRET"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "COSTCO_KV",
+      "id": "14b20bfa0d37418e8b552efa9ceef4aa"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "costco-stock-watcher-v2",
+      "database_id": "c08c2f01-5aca-4a7b-b35f-331b69f82a79",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
