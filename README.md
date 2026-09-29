@@ -1,12 +1,12 @@
 # Costco Product Stock Watcher v2
 
-以 Cloudflare Worker 執行的 Costco 台灣商品庫存監控工具。使用者可直接透過 Telegram 新增與管理商品；系統每五分鐘檢查一次 Costco 商品 API，只在可信的狀態改變時通知。
+以 Cloudflare Worker 執行的 Costco 台灣商品庫存監控工具。使用者可透過 Telegram 的單一 `/trackcc <商品連結>` 指令新增商品；系統每五分鐘檢查一次 Costco 商品 API，只在可信的狀態改變時通知。
 
 > v2 已於 2026-09-24 部署至正式 Worker `costco-ims`。舊版 Python/Playwright 腳本保留在 `src/monitor.py`，供回溯使用。
 
 ## v2 改善重點
 
-- Telegram-first：直接貼 Costco 商品網址即可加入監控。
+- Telegram 指令收斂為 `/trackcc <Costco 商品網址>`；其他訊息與指令靜默忽略，保留 namespace 供未來功能使用。
 - D1 持久化商品、檢查歷史、通知狀態及執行鎖。
 - 從既有 `COSTCO_KV` 的 `products` key 自動匯入商品。
 - 明確區分 `in_stock`、`out_of_stock`、`unknown`、`blocked`、`not_found`、`error`。
@@ -34,16 +34,13 @@ Cloudflare Cron ──► monitor service ──► Costco REST API
 
 ## Telegram 操作
 
-- 直接貼上 Costco 台灣商品網址：新增或恢復監控。
-- `/watchlist`：顯示監控商品卡片。
-- `/check [商品編號]`：檢查全部或單一商品。
-- `/pause 商品編號`：暫停。
-- `/resume 商品編號`：恢復。
-- `/remove 商品編號`：確認後封存，保留歷史。
-- `/status`：查看服務狀態。
-- `/help`：查看說明。
+唯一接受的訊息格式：
 
-舊版 `/trackcc help|list|add|remove|check` 指令仍保留相容性。
+```text
+/trackcc https://www.costco.com.tw/p/363984
+```
+
+系統只會對這個格式回覆並新增或恢復商品監控；直接貼連結、`/help`、`/status`、舊版 `/trackcc add`，以及訊息按鈕 callback 都不會回應。
 
 ## 開發環境
 

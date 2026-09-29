@@ -1,12 +1,6 @@
 import type { NotificationDecision, Product, StockObservation } from "./domain";
 import type { AppEnv } from "./env";
 
-interface InlineKeyboardButton {
-  text: string;
-  callback_data?: string;
-  url?: string;
-}
-
 export async function sendDecisionNotification(
   env: AppEnv,
   product: Product,
@@ -31,10 +25,6 @@ export async function sendDecisionNotification(
       ]
         .filter(Boolean)
         .join("\n"),
-      [[
-        { text: "立即查看", url: product.url },
-        { text: "暫停監控", callback_data: `pause:${product.code}` },
-      ]],
     );
     return;
   }
@@ -56,7 +46,6 @@ export async function sendDecisionNotification(
 async function sendMessage(
   env: AppEnv,
   text: string,
-  inlineKeyboard?: InlineKeyboardButton[][],
 ): Promise<void> {
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
@@ -65,7 +54,6 @@ async function sendMessage(
       chat_id: env.TELEGRAM_CHAT_ID,
       text,
       disable_web_page_preview: true,
-      reply_markup: inlineKeyboard ? { inline_keyboard: inlineKeyboard } : undefined,
     }),
   });
   if (!response.ok) throw new Error(`Telegram sendMessage failed with HTTP ${response.status}`);
